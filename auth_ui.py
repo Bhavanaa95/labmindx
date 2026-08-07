@@ -82,7 +82,7 @@ def render_auth_page() -> None:
         'background:linear-gradient(135deg,#2563eb,#7c3aed);'
         'box-shadow:0 30px 80px rgba(15,23,42,.30);color:white;">'
         '<div style="font-size:46px;font-weight:900;margin-bottom:8px;">'
-        '🧪 LabMind.ai</div>'
+        '🧪 LabMindX</div>'
         '<div style="font-size:18px;font-weight:700;'
         'color:#dbeafe;margin-bottom:32px;">Premium AI Data Analyst</div>'
         '<div style="font-size:31px;font-weight:900;'

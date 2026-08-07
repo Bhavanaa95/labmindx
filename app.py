@@ -80,7 +80,7 @@ except Exception:
     CatBoostClassifier = None
 
 
-st.set_page_config(page_title="LabMind.ai", page_icon="🧠", layout="wide")
+st.set_page_config(page_title="LabMindX", page_icon="🧠", layout="wide")
 
 
 def create_pdf_report(report_text):
@@ -89,7 +89,7 @@ def create_pdf_report(report_text):
     width, height = letter
 
     pdf.setFont("Helvetica-Bold", 20)
-    pdf.drawString(40, height - 50, "LabMind.ai Analysis Report")
+    pdf.drawString(40, height - 50, "LabMindX Analysis Report")
 
     pdf.setFont("Helvetica", 10)
     y = height - 90
@@ -112,7 +112,7 @@ def create_ppt_report(report_text):
     prs = Presentation()
 
     slide = prs.slides.add_slide(prs.slide_layouts[0])
-    slide.shapes.title.text = "LabMind.ai Analysis Report"
+    slide.shapes.title.text = "LabMindX Analysis Report"
     slide.placeholders[1].text = "AI-powered dataset analysis and machine learning report"
 
     slide = prs.slides.add_slide(prs.slide_layouts[1])
@@ -748,7 +748,7 @@ def create_professional_pdf_report(report_text, leaderboard_df=None, explain_df=
         return height - 50
 
     pdf.setFont("Helvetica-Bold", 24)
-    pdf.drawString(40, height - 60, "LabMind.ai Executive Report")
+    pdf.drawString(40, height - 60, "LabMindX Executive Report")
     pdf.setFont("Helvetica", 12)
     pdf.drawString(40, height - 88, "AI-powered dataset analysis, AutoML, explainability, and deployment summary")
     y = height - 125
@@ -1241,10 +1241,10 @@ def render_labmind_logo(size="large"):
             <img
                 src="data:image/png;base64,{logo_base64}"
                 class="brand-logo"
-                alt="LabMind.ai logo"
+                alt="LabMindX logo"
             >
             <div>
-                <div class="brand-name">LabMind.ai</div>
+                <div class="brand-name">LabMindX</div>
                 <div class="brand-tagline">AI Data Analyst</div>
             </div>
         </div>
@@ -2740,7 +2740,7 @@ def render_labmind_hero():
 
         logo_html = (
             f'<img src="data:image/png;base64,{logo_base64}" '
-            f'class="hero-real-logo" alt="LabMind.ai logo">'
+            f'class="hero-real-logo" alt="LabMindX logo">'
         )
     else:
         logo_html = '<span>🧪</span>'
@@ -2752,7 +2752,7 @@ def render_labmind_hero():
         f'{logo_html}'
         '</div>'
         '<div>'
-        '<div class="hero-brand-name-new">LabMind.ai</div>'
+        '<div class="hero-brand-name-new">LabMindX</div>'
         '<div class="hero-brand-tagline-new">Premium AI Data Analyst</div>'
         '</div>'
         '</div>'
@@ -3201,7 +3201,7 @@ if uploaded_file:
 
                 models = build_classification_models(y)
 
-                st.info(f"LabMind will compare {len(models)} classification models for this target.")
+                st.info(f"LabMindX will compare {len(models)} classification models for this target.")
 
                 results = []
                 trained_models = {}
@@ -3406,7 +3406,7 @@ if uploaded_file:
                     top_value = importance.iloc[0]["Importance"]
 
                     report_text = f"""
-LabMind.ai Analysis Report
+LabMindX Analysis Report
 
 Executive Summary:
 - Dataset contains {df.shape[0]} rows and {df.shape[1]} columns.
@@ -3610,7 +3610,7 @@ Recommendations:
         </div>
         """, unsafe_allow_html=True)
 
-        question = st.text_input("Ask LabMind a question about your dataset")
+        question = st.text_input("Ask LabMindX a question about your dataset")
 
         if question:
             answer = answer_dataset_question(
