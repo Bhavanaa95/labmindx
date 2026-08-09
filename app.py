@@ -2902,9 +2902,9 @@ if uploaded_file:
 else:
     removed_columns = []
 
+if df is not None:
     if removed_columns:
-        st.info(f"LabMind automatically removed empty/system columns: {removed_columns}")
-
+        st.info(f"LabMindX automatically removed empty/system columns: {removed_columns}")
     total_missing = int(df.isnull().sum().sum())
     total_cells = df.shape[0] * df.shape[1]
     missing_percentage = (total_missing / total_cells) * 100 if total_cells > 0 else 0
