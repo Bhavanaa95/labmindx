@@ -119,7 +119,7 @@ def render_auth_page() -> None:
         with login_tab:
             st.markdown("## Welcome back")
             st.caption(
-                "Sign in to continue to your LabMind workspace."
+                "Sign in to continue to your LabMindX workspace."
             )
 
             with st.form("login_form"):
@@ -135,7 +135,7 @@ def render_auth_page() -> None:
                 )
 
                 login_submitted = st.form_submit_button(
-                    "Log in to LabMind",
+                    "Log in to LabMindX",
                     use_container_width=True,
                 )
 
@@ -148,6 +148,8 @@ def render_auth_page() -> None:
                 if success:
                     st.session_state["authenticated"] = True
                     st.session_state["current_user"] = user
+                    st.session_state["show_auth_page"] = False
+
                     st.success(message)
                     st.rerun()
                 else:
@@ -156,7 +158,7 @@ def render_auth_page() -> None:
         with signup_tab:
             st.markdown("## Create your account")
             st.caption(
-                "Set up your LabMind workspace in under a minute."
+                "Set up your LabMindX workspace in under a minute."
             )
 
             with st.form("signup_form"):

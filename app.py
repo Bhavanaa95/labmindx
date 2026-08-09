@@ -8,6 +8,7 @@ import zipfile
 import textwrap
 import joblib
 import time
+from PIL import Image
 from auth_ui import render_auth_page
 from auth import (
     authenticate_user,
@@ -24,23 +25,40 @@ if "current_user" not in st.session_state:
     st.session_state["current_user"] = None
 
 if "auth_mode" not in st.session_state:
-    st.session_state["auth_mode"] = "Login"
+    st.session_state["auth_mode"] = "Login"  
 
-if not st.session_state["authenticated"]:
-    render_auth_page()
-    st.stop()    
+if "show_auth_page" not in st.session_state:
+    st.session_state["show_auth_page"] = False
+
+if "return_to_training" not in st.session_state:
+    st.session_state["return_to_training"] = False
 
 user = st.session_state["current_user"]
 
-st.markdown(
-    f"""
-    <h2>👋 Welcome back, {user['full_name']}!</h2>
-    <p style="color:gray;">
-        Ready to build your next machine learning model?
-    </p>
-    """,
-    unsafe_allow_html=True,
-)
+if st.session_state["show_auth_page"] and not st.session_state["authenticated"]:
+    render_auth_page()
+    st.stop()
+
+if st.session_state["authenticated"] and user:
+    st.markdown(
+        f"""
+        <h2>👋 Welcome back, {user['full_name']}!</h2>
+        <p style="color:gray;">
+            Ready to build your next machine learning model?
+        </p>
+        """,
+        unsafe_allow_html=True,
+    )
+else:
+    st.markdown(
+        """
+        <h2>👋 Welcome to LabMindX</h2>
+        <p style="color:gray;">
+            Explore your dataset first. Create an account when you're ready to train models.
+        </p>
+        """,
+        unsafe_allow_html=True,
+    )
 try:
     import shap
 except Exception:
@@ -80,7 +98,7 @@ except Exception:
     CatBoostClassifier = None
 
 
-st.set_page_config(page_title="LabMindX", page_icon="🧠", layout="wide")
+st.set_page_config(page_title="LabMindX", page_icon="labmind_logo.png", layout="wide")
 
 
 def create_pdf_report(report_text):
@@ -3177,19 +3195,30 @@ if uploaded_file:
 
         run_hyperparameter_tuning = st.checkbox("🔧 Run lightweight hyperparameter optimization after baseline training", value=False)
 
-        if st.button("🚀 Train & Compare Models"):
-            if target_column.lower() in ["passengerid", "id"]:
-                st.error("Do not use an ID column as the target. Choose something meaningful like Survived.")
-            else:
-                data, X, y, category_maps, numeric_defaults, target_label_map = prepare_ml_data(df, target_column)
+if st.button("🚀 Train & Compare Models"):
 
-                if y.nunique() < 2:
-                    st.error(f"This target column has only one class after preprocessing: {list(y.unique())}. Choose a different target column.")
-                    st.stop()
+    if not st.session_state["authenticated"]:
+        st.session_state["show_auth_page"] = True
+        st.session_state["return_to_training"] = True
+        st.session_state["auth_mode"] = "Login"
+        st.rerun()
 
-                stratify_y = None
-                if y.nunique() <= 20 and y.value_counts().min() >= 2:
-                    stratify_y = y
+    if target_column.lower() in ["passengerid", "id"]:
+        st.error("Do not use an ID column as the target. Choose something meaningful like Survived.")
+    else:
+        data, X, y, category_maps, numeric_defaults, target_label_map = prepare_ml_data(df, target_column)
+
+        if y.nunique() < 2:
+            st.error(
+                f"This target column has only one class after preprocessing: {list(y.unique())}. "
+                "Choose a different target column."
+            )
+            st.stop()
+
+        stratify_y = None
+
+        if y.nunique() <= 20 and y.value_counts().min() >= 2:
+                stratify_y = y
 
                 X_train, X_test, y_train, y_test = train_test_split(
                     X,
