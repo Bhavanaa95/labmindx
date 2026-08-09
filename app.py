@@ -33,6 +33,12 @@ if "show_auth_page" not in st.session_state:
 if "return_to_training" not in st.session_state:
     st.session_state["return_to_training"] = False
 
+if "saved_df" not in st.session_state:
+    st.session_state["saved_df"] = None
+
+if "saved_filename" not in st.session_state:
+    st.session_state["saved_filename"] = None
+
 user = st.session_state["current_user"]
 
 if st.session_state["show_auth_page"] and not st.session_state["authenticated"]:
@@ -2865,9 +2871,10 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-
-uploaded_file = st.file_uploader("📁 Upload or drag your CSV file here", type=["csv"])
-
+uploaded_file = st.file_uploader(
+    "📁 Upload or drag your CSV file here",
+    type=["csv"]
+)
 
 if uploaded_file:
     reset_model_state_if_new_file(uploaded_file)
@@ -2875,8 +2882,19 @@ if uploaded_file:
     raw_df = pd.read_csv(uploaded_file)
     df = clean_uploaded_dataframe(raw_df)
 
+    # Save the uploaded dataset so it survives login/auth reruns
+    st.session_state["saved_df"] = df.copy()
+    st.session_state["saved_filename"] = uploaded_file.name
+
+elif st.session_state.get("saved_df") is not None:
+    # Restore the dataset after returning from login
+    df = st.session_state["saved_df"].copy()
+    raw_df = df.copy()
+
+if uploaded_file:
     removed_columns = [col for col in raw_df.columns if col not in df.columns]
-    st.success("Dataset uploaded successfully!")
+else:
+    removed_columns = []
 
     if removed_columns:
         st.info(f"LabMind automatically removed empty/system columns: {removed_columns}")
