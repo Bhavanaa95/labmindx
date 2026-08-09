@@ -2891,6 +2891,12 @@ elif st.session_state.get("saved_df") is not None:
     df = st.session_state["saved_df"].copy()
     raw_df = df.copy()
 
+else:
+    df = None
+
+if df is None:
+    st.stop()
+
 if uploaded_file:
     removed_columns = [col for col in raw_df.columns if col not in df.columns]
 else:
