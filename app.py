@@ -2890,6 +2890,8 @@ elif st.session_state.get("saved_df") is not None:
     # Restore the dataset after returning from login
     df = st.session_state["saved_df"].copy()
     raw_df = df.copy()
+    if st.session_state.get("saved_filename"):
+        st.caption(f"Using saved dataset: {st.session_state['saved_filename']}")
 
 else:
     df = None
@@ -3066,7 +3068,7 @@ if df is not None:
         if comparison_file is not None:
             comparison_raw = pd.read_csv(comparison_file)
             comparison_df = clean_uploaded_dataframe(comparison_raw)
-            comparison_summary = compare_two_datasets(df, comparison_df, uploaded_file.name, comparison_file.name)
+            comparison_summary = compare_two_datasets(df, comparison_df, st.session_state.get("saved_filename") or "Current dataset", comparison_file.name)
             st.dataframe(comparison_summary, use_container_width=True)
             st.download_button(
                 "📥 Download Dataset Comparison CSV",
@@ -3219,30 +3221,30 @@ if df is not None:
 
         run_hyperparameter_tuning = st.checkbox("🔧 Run lightweight hyperparameter optimization after baseline training", value=False)
 
-if st.button("🚀 Train & Compare Models"):
+        if st.button("🚀 Train & Compare Models"):
 
-    if not st.session_state["authenticated"]:
-        st.session_state["show_auth_page"] = True
-        st.session_state["return_to_training"] = True
-        st.session_state["auth_mode"] = "Login"
-        st.rerun()
+            if not st.session_state["authenticated"]:
+                st.session_state["show_auth_page"] = True
+                st.session_state["return_to_training"] = True
+                st.session_state["auth_mode"] = "Login"
+                st.rerun()
 
-    if target_column.lower() in ["passengerid", "id"]:
-        st.error("Do not use an ID column as the target. Choose something meaningful like Survived.")
-    else:
-        data, X, y, category_maps, numeric_defaults, target_label_map = prepare_ml_data(df, target_column)
+            if target_column.lower() in ["passengerid", "id"]:
+                st.error("Do not use an ID column as the target. Choose something meaningful like Survived.")
+            else:
+                data, X, y, category_maps, numeric_defaults, target_label_map = prepare_ml_data(df, target_column)
 
-        if y.nunique() < 2:
-            st.error(
-                f"This target column has only one class after preprocessing: {list(y.unique())}. "
-                "Choose a different target column."
-            )
-            st.stop()
+                if y.nunique() < 2:
+                    st.error(
+                        f"This target column has only one class after preprocessing: {list(y.unique())}. "
+                        "Choose a different target column."
+                    )
+                    st.stop()
 
-        stratify_y = None
+                stratify_y = None
 
-        if y.nunique() <= 20 and y.value_counts().min() >= 2:
-                stratify_y = y
+                if y.nunique() <= 20 and y.value_counts().min() >= 2:
+                    stratify_y = y
 
                 X_train, X_test, y_train, y_test = train_test_split(
                     X,
@@ -3259,8 +3261,14 @@ if st.button("🚀 Train & Compare Models"):
                 results = []
                 trained_models = {}
 
-                for name, model in models.items():
+                progress = st.progress(0)
+                status = st.empty()
+                total_models = max(len(models), 1)
+
+                for i, (name, model) in enumerate(models.items(), start=1):
                     try:
+                        status.info(f"Training {i}/{len(models)} — {name}...")
+
                         model.fit(X_train, y_train)
                         preds = model.predict(X_test)
                         acc = accuracy_score(y_test, preds)
@@ -3269,6 +3277,7 @@ if st.button("🚀 Train & Compare Models"):
                         cv_mean = np.nan
                         cv_std = np.nan
                         try:
+                            status.info(f"Validating {i}/{len(models)} — {name}...")
                             cv_splits = min(5, int(y.value_counts().min())) if y.nunique() <= 20 else 3
                             if cv_splits >= 2:
                                 cv = StratifiedKFold(n_splits=cv_splits, shuffle=True, random_state=42)
@@ -3278,10 +3287,28 @@ if st.button("🚀 Train & Compare Models"):
                         except Exception:
                             pass
 
-                        results.append({"Model": name, "Accuracy": acc, "Weighted F1": f1, "CV Mean": cv_mean, "CV Std": cv_std})
-                        trained_models[name] = {"model": model, "predictions": preds, "accuracy": acc, "weighted_f1": f1, "cv_mean": cv_mean, "cv_std": cv_std}
+                        results.append({
+                            "Model": name,
+                            "Accuracy": acc,
+                            "Weighted F1": f1,
+                            "CV Mean": cv_mean,
+                            "CV Std": cv_std,
+                        })
+                        trained_models[name] = {
+                            "model": model,
+                            "predictions": preds,
+                            "accuracy": acc,
+                            "weighted_f1": f1,
+                            "cv_mean": cv_mean,
+                            "cv_std": cv_std,
+                        }
                     except Exception as e:
                         st.warning(f"{name} skipped: {e}")
+                    finally:
+                        progress.progress(i / total_models)
+
+                progress.progress(1.0)
+                status.success("Baseline model comparison complete.")
 
                 if run_hyperparameter_tuning and len(results) > 0:
                     with st.spinner("Optimizing top baseline models..."):
@@ -3289,6 +3316,7 @@ if st.button("🚀 Train & Compare Models"):
                             results, trained_models, X_train, y_train, X_test, y_test, top_k=3
                         )
                         st.session_state["tuning_results"] = tuning_log
+
                     if tuning_log:
                         st.write("### 🔧 Hyperparameter Optimization Results")
                         st.dataframe(pd.DataFrame(tuning_log), use_container_width=True)
@@ -3296,282 +3324,282 @@ if st.button("🚀 Train & Compare Models"):
                 if len(results) == 0:
                     st.error("No models could be trained. Try a different target column.")
                 else:
-                    results_df = pd.DataFrame(results).sort_values(by="Accuracy", ascending=False)
-                    best_model_name = results_df.iloc[0]["Model"]
-                    best_accuracy = results_df.iloc[0]["Accuracy"]
-                    best_model = trained_models[best_model_name]["model"]
-                    best_predictions = trained_models[best_model_name]["predictions"]
+                            results_df = pd.DataFrame(results).sort_values(by="Accuracy", ascending=False)
+                            best_model_name = results_df.iloc[0]["Model"]
+                            best_accuracy = results_df.iloc[0]["Accuracy"]
+                            best_model = trained_models[best_model_name]["model"]
+                            best_predictions = trained_models[best_model_name]["predictions"]
 
-                    st.session_state["best_model"] = best_model
-                    st.session_state["best_model_name"] = best_model_name
-                    st.session_state["best_accuracy"] = best_accuracy
-                    st.session_state["target_column"] = target_column
-                    st.session_state["feature_columns"] = list(X.columns)
-                    st.session_state["category_maps"] = category_maps
-                    st.session_state["numeric_defaults"] = numeric_defaults
-                    st.session_state["target_label_map"] = target_label_map
-                    st.session_state["trained_models"] = trained_models
-                    st.session_state["leaderboard"] = results_df.copy()
-                    st.session_state["X_train"] = X_train
-                    st.session_state["X_test"] = X_test
-                    st.session_state["y_train"] = y_train
-                    st.session_state["y_test"] = y_test
+                            st.session_state["best_model"] = best_model
+                            st.session_state["best_model_name"] = best_model_name
+                            st.session_state["best_accuracy"] = best_accuracy
+                            st.session_state["target_column"] = target_column
+                            st.session_state["feature_columns"] = list(X.columns)
+                            st.session_state["category_maps"] = category_maps
+                            st.session_state["numeric_defaults"] = numeric_defaults
+                            st.session_state["target_label_map"] = target_label_map
+                            st.session_state["trained_models"] = trained_models
+                            st.session_state["leaderboard"] = results_df.copy()
+                            st.session_state["X_train"] = X_train
+                            st.session_state["X_test"] = X_test
+                            st.session_state["y_train"] = y_train
+                            st.session_state["y_test"] = y_test
 
-                    st.success("Models trained successfully!")
+                            st.success("Models trained successfully!")
 
-                    m1, m2 = st.columns(2)
-                    m1.metric("Best Model", best_model_name)
-                    m2.metric("Best Accuracy", f"{best_accuracy * 100:.2f}%")
+                            m1, m2 = st.columns(2)
+                            m1.metric("Best Model", best_model_name)
+                            m2.metric("Best Accuracy", f"{best_accuracy * 100:.2f}%")
 
-                    st.write("### 🏆 Model Leaderboard")
-                    leaderboard = results_df.copy().sort_values(by="Accuracy", ascending=False).reset_index(drop=True)
-                    leaderboard_display = leaderboard.copy()
-                    leaderboard_display["Accuracy"] = leaderboard_display["Accuracy"].apply(lambda x: f"{x * 100:.2f}%")
-                    if "Weighted F1" in leaderboard_display.columns:
-                        leaderboard_display["Weighted F1"] = leaderboard_display["Weighted F1"].apply(lambda x: f"{x * 100:.2f}%")
-                    if "CV Mean" in leaderboard_display.columns:
-                        leaderboard_display["CV Mean"] = leaderboard_display["CV Mean"].apply(lambda x: "N/A" if pd.isna(x) else f"{x * 100:.2f}%")
-                    if "CV Std" in leaderboard_display.columns:
-                        leaderboard_display["CV Std"] = leaderboard_display["CV Std"].apply(lambda x: "N/A" if pd.isna(x) else f"±{x * 100:.2f}%")
-                    leaderboard_display.insert(0, "Rank", (["🥇", "🥈", "🥉"] + [f"#{i}" for i in range(4, len(leaderboard_display) + 1)])[:len(leaderboard_display)])
-                    st.dataframe(leaderboard_display, use_container_width=True)
+                            st.write("### 🏆 Model Leaderboard")
+                            leaderboard = results_df.copy().sort_values(by="Accuracy", ascending=False).reset_index(drop=True)
+                            leaderboard_display = leaderboard.copy()
+                            leaderboard_display["Accuracy"] = leaderboard_display["Accuracy"].apply(lambda x: f"{x * 100:.2f}%")
+                            if "Weighted F1" in leaderboard_display.columns:
+                                leaderboard_display["Weighted F1"] = leaderboard_display["Weighted F1"].apply(lambda x: f"{x * 100:.2f}%")
+                            if "CV Mean" in leaderboard_display.columns:
+                                leaderboard_display["CV Mean"] = leaderboard_display["CV Mean"].apply(lambda x: "N/A" if pd.isna(x) else f"{x * 100:.2f}%")
+                            if "CV Std" in leaderboard_display.columns:
+                                leaderboard_display["CV Std"] = leaderboard_display["CV Std"].apply(lambda x: "N/A" if pd.isna(x) else f"±{x * 100:.2f}%")
+                            leaderboard_display.insert(0, "Rank", (["🥇", "🥈", "🥉"] + [f"#{i}" for i in range(4, len(leaderboard_display) + 1)])[:len(leaderboard_display)])
+                            st.dataframe(leaderboard_display, use_container_width=True)
 
-                    runner_up_text = ""
-                    if len(leaderboard) > 1:
-                        runner_up_text = f" The runner-up was {leaderboard.iloc[1]['Model']} with {leaderboard.iloc[1]['Accuracy'] * 100:.2f}% accuracy."
+                            runner_up_text = ""
+                            if len(leaderboard) > 1:
+                                runner_up_text = f" The runner-up was {leaderboard.iloc[1]['Model']} with {leaderboard.iloc[1]['Accuracy'] * 100:.2f}% accuracy."
 
-                    st.markdown(f"""
-                    <div class="model-highlight">
-                        🏆 <b>{best_model_name}</b> is currently the strongest model with <b>{best_accuracy * 100:.2f}%</b> accuracy.{runner_up_text}<br><br>
-                        🧠 LabMind recommendation: use this as your baseline model, then validate it on a separate dataset before deployment.
-                    </div>
-                    """, unsafe_allow_html=True)
+                            st.markdown(f"""
+                            <div class="model-highlight">
+                                🏆 <b>{best_model_name}</b> is currently the strongest model with <b>{best_accuracy * 100:.2f}%</b> accuracy.{runner_up_text}<br><br>
+                                🧠 LabMind recommendation: use this as your baseline model, then validate it on a separate dataset before deployment.
+                            </div>
+                            """, unsafe_allow_html=True)
 
-                    render_ai_model_card(best_model_name, best_accuracy, leaderboard)
-                    render_model_comparison_dashboard(leaderboard)
-                    render_model_comparison_charts(leaderboard)
+                            render_ai_model_card(best_model_name, best_accuracy, leaderboard)
+                            render_model_comparison_dashboard(leaderboard)
+                            render_model_comparison_charts(leaderboard)
 
-                    cm = confusion_matrix(y_test, best_predictions)
-                    st.session_state["confusion_matrix"] = cm
+                            cm = confusion_matrix(y_test, best_predictions)
+                            st.session_state["confusion_matrix"] = cm
 
-                    st.write("### Confusion Matrix")
-                    render_confusion_summary(cm)
+                            st.write("### Confusion Matrix")
+                            render_confusion_summary(cm)
 
-                    fig_cm, ax_cm = plt.subplots(figsize=(6, 4))
-                    im_cm = ax_cm.imshow(cm)
-                    ax_cm.set_title("Confusion Matrix")
-                    ax_cm.set_xlabel("Predicted")
-                    ax_cm.set_ylabel("Actual")
-                    ax_cm.set_xticks(range(cm.shape[1]))
-                    ax_cm.set_yticks(range(cm.shape[0]))
-                    if target_label_map:
-                        labels = [str(target_label_map.get(i, i)) for i in range(cm.shape[0])]
-                        ax_cm.set_xticklabels(labels)
-                        ax_cm.set_yticklabels(labels)
+                            fig_cm, ax_cm = plt.subplots(figsize=(6, 4))
+                            im_cm = ax_cm.imshow(cm)
+                            ax_cm.set_title("Confusion Matrix")
+                            ax_cm.set_xlabel("Predicted")
+                            ax_cm.set_ylabel("Actual")
+                            ax_cm.set_xticks(range(cm.shape[1]))
+                            ax_cm.set_yticks(range(cm.shape[0]))
+                            if target_label_map:
+                                labels = [str(target_label_map.get(i, i)) for i in range(cm.shape[0])]
+                                ax_cm.set_xticklabels(labels)
+                                ax_cm.set_yticklabels(labels)
 
-                    for i in range(cm.shape[0]):
-                        for j in range(cm.shape[1]):
-                            ax_cm.text(j, i, cm[i, j], ha="center", va="center", fontsize=14, fontweight="bold")
+                            for i in range(cm.shape[0]):
+                                for j in range(cm.shape[1]):
+                                    ax_cm.text(j, i, cm[i, j], ha="center", va="center", fontsize=14, fontweight="bold")
 
-                    fig_cm.colorbar(im_cm, ax=ax_cm)
-                    st.pyplot(fig_cm)
+                            fig_cm.colorbar(im_cm, ax=ax_cm)
+                            st.pyplot(fig_cm)
 
-                    if hasattr(best_model, "predict_proba") and len(pd.Series(y_test).unique()) == 2:
-                        st.write("### ROC Curve")
-                        y_prob = best_model.predict_proba(X_test)[:, 1]
-                        fpr, tpr, _ = roc_curve(y_test, y_prob)
-                        roc_auc = auc(fpr, tpr)
-                        st.session_state["roc_auc"] = roc_auc
-                        render_auc_summary(roc_auc)
+                            if hasattr(best_model, "predict_proba") and len(pd.Series(y_test).unique()) == 2:
+                                st.write("### ROC Curve")
+                                y_prob = best_model.predict_proba(X_test)[:, 1]
+                                fpr, tpr, _ = roc_curve(y_test, y_prob)
+                                roc_auc = auc(fpr, tpr)
+                                st.session_state["roc_auc"] = roc_auc
+                                render_auc_summary(roc_auc)
 
-                        fig_roc, ax_roc = plt.subplots(figsize=(7, 5))
-                        ax_roc.plot(fpr, tpr, label=f"AUC = {roc_auc:.3f}")
-                        ax_roc.plot([0, 1], [0, 1], linestyle="--")
-                        ax_roc.set_xlabel("False Positive Rate")
-                        ax_roc.set_ylabel("True Positive Rate")
-                        ax_roc.set_title("ROC Curve")
-                        ax_roc.legend(loc="lower right")
-                        st.pyplot(fig_roc)
+                                fig_roc, ax_roc = plt.subplots(figsize=(7, 5))
+                                ax_roc.plot(fpr, tpr, label=f"AUC = {roc_auc:.3f}")
+                                ax_roc.plot([0, 1], [0, 1], linestyle="--")
+                                ax_roc.set_xlabel("False Positive Rate")
+                                ax_roc.set_ylabel("True Positive Rate")
+                                ax_roc.set_title("ROC Curve")
+                                ax_roc.legend(loc="lower right")
+                                st.pyplot(fig_roc)
 
-                    st.write("### ROC Curves Across Models")
-                    render_all_model_roc_curves(trained_models, X_test, y_test)
+                            st.write("### ROC Curves Across Models")
+                            render_all_model_roc_curves(trained_models, X_test, y_test)
 
-                    st.write("### Classification Report")
-                    report_df = make_readable_classification_report(y_test, best_predictions, target_label_map)
-                    st.dataframe(report_df, use_container_width=True)
+                            st.write("### Classification Report")
+                            report_df = make_readable_classification_report(y_test, best_predictions, target_label_map)
+                            st.dataframe(report_df, use_container_width=True)
 
-                    weighted_precision = report_df.loc["weighted avg", "precision"] if "weighted avg" in report_df.index else None
-                    weighted_recall = report_df.loc["weighted avg", "recall"] if "weighted avg" in report_df.index else None
-                    weighted_f1 = report_df.loc["weighted avg", "f1-score"] if "weighted avg" in report_df.index else None
+                            weighted_precision = report_df.loc["weighted avg", "precision"] if "weighted avg" in report_df.index else None
+                            weighted_recall = report_df.loc["weighted avg", "recall"] if "weighted avg" in report_df.index else None
+                            weighted_f1 = report_df.loc["weighted avg", "f1-score"] if "weighted avg" in report_df.index else None
 
-                    st.write("### Model Performance Summary")
-                    perf1, perf2, perf3, perf4 = st.columns(4)
-                    perf1.metric("Accuracy", f"{best_accuracy * 100:.2f}%")
-                    perf2.metric("Weighted Precision", f"{weighted_precision * 100:.2f}%" if weighted_precision is not None else "N/A")
-                    perf3.metric("Weighted Recall", f"{weighted_recall * 100:.2f}%" if weighted_recall is not None else "N/A")
-                    perf4.metric("Weighted F1", f"{weighted_f1 * 100:.2f}%" if weighted_f1 is not None else "N/A")
+                            st.write("### Model Performance Summary")
+                            perf1, perf2, perf3, perf4 = st.columns(4)
+                            perf1.metric("Accuracy", f"{best_accuracy * 100:.2f}%")
+                            perf2.metric("Weighted Precision", f"{weighted_precision * 100:.2f}%" if weighted_precision is not None else "N/A")
+                            perf3.metric("Weighted Recall", f"{weighted_recall * 100:.2f}%" if weighted_recall is not None else "N/A")
+                            perf4.metric("Weighted F1", f"{weighted_f1 * 100:.2f}%" if weighted_f1 is not None else "N/A")
 
-                    best_row = leaderboard[leaderboard["Model"] == best_model_name].iloc[0]
-                    st.write("### Cross-Validation Stability")
-                    cv1, cv2 = st.columns(2)
-                    cv_mean_value = best_row.get("CV Mean", np.nan)
-                    cv_std_value = best_row.get("CV Std", np.nan)
-                    cv1.metric("CV Mean Accuracy", "N/A" if pd.isna(cv_mean_value) else f"{cv_mean_value * 100:.2f}%")
-                    cv2.metric("CV Variation", "N/A" if pd.isna(cv_std_value) else f"±{cv_std_value * 100:.2f}%")
-                    if not pd.isna(cv_mean_value):
-                        st.markdown(f"""
-                        <div class="model-highlight">
-                            ✅ Cross-validation checks whether the model stays reliable across multiple data splits. 
-                            The best model averaged <b>{cv_mean_value * 100:.2f}%</b> accuracy with variation of <b>±{cv_std_value * 100:.2f}%</b>.
-                        </div>
-                        """, unsafe_allow_html=True)
+                            best_row = leaderboard[leaderboard["Model"] == best_model_name].iloc[0]
+                            st.write("### Cross-Validation Stability")
+                            cv1, cv2 = st.columns(2)
+                            cv_mean_value = best_row.get("CV Mean", np.nan)
+                            cv_std_value = best_row.get("CV Std", np.nan)
+                            cv1.metric("CV Mean Accuracy", "N/A" if pd.isna(cv_mean_value) else f"{cv_mean_value * 100:.2f}%")
+                            cv2.metric("CV Variation", "N/A" if pd.isna(cv_std_value) else f"±{cv_std_value * 100:.2f}%")
+                            if not pd.isna(cv_mean_value):
+                                st.markdown(f"""
+                                <div class="model-highlight">
+                                    ✅ Cross-validation checks whether the model stays reliable across multiple data splits. 
+                                    The best model averaged <b>{cv_mean_value * 100:.2f}%</b> accuracy with variation of <b>±{cv_std_value * 100:.2f}%</b>.
+                                </div>
+                                """, unsafe_allow_html=True)
 
-                    st.session_state["classification_report_df"] = report_df.copy()
+                            st.session_state["classification_report_df"] = report_df.copy()
 
-                    st.download_button(
-                        "📊 Download Metrics CSV",
-                        data=report_df.to_csv().encode("utf-8"),
-                        file_name="labmind_model_metrics.csv",
-                        mime="text/csv",
-                        key="download_metrics_csv_automl"
-                    )
+                            st.download_button(
+                                "📊 Download Metrics CSV",
+                                data=report_df.to_csv().encode("utf-8"),
+                                file_name="labmind_model_metrics.csv",
+                                mime="text/csv",
+                                key="download_metrics_csv_automl"
+                            )
 
-                    st.write("### Feature Importance")
-                    importance_values = get_model_importance(best_model, X.columns)
+                            st.write("### Feature Importance")
+                            importance_values = get_model_importance(best_model, X.columns)
 
-                    importance = pd.DataFrame({
-                        "Feature": X.columns,
-                        "Importance": importance_values
-                    }).sort_values(by="Importance", ascending=False)
+                            importance = pd.DataFrame({
+                                "Feature": X.columns,
+                                "Importance": importance_values
+                            }).sort_values(by="Importance", ascending=False)
 
-                    importance_top = prepare_top_importance_table(importance, top_n=10)
-                    st.dataframe(importance_top, use_container_width=True)
+                            importance_top = prepare_top_importance_table(importance, top_n=10)
+                            st.dataframe(importance_top, use_container_width=True)
 
-                    fig5, ax5 = plt.subplots(figsize=(10, 5))
-                    top_plot = importance.head(15).sort_values("Importance", ascending=True)
-                    ax5.barh(top_plot["Feature"], top_plot["Importance"])
-                    ax5.set_xlabel("Importance")
-                    ax5.set_ylabel("Feature")
-                    ax5.set_title("Top 15 Feature Importance")
-                    st.pyplot(fig5)
+                            fig5, ax5 = plt.subplots(figsize=(10, 5))
+                            top_plot = importance.head(15).sort_values("Importance", ascending=True)
+                            ax5.barh(top_plot["Feature"], top_plot["Importance"])
+                            ax5.set_xlabel("Importance")
+                            ax5.set_ylabel("Feature")
+                            ax5.set_title("Top 15 Feature Importance")
+                            st.pyplot(fig5)
 
-                    top_feature = importance.iloc[0]["Feature"]
-                    top_value = importance.iloc[0]["Importance"]
+                            top_feature = importance.iloc[0]["Feature"]
+                            top_value = importance.iloc[0]["Importance"]
 
-                    report_text = f"""
-LabMindX Analysis Report
+                            report_text = f"""
+        LabMindX Analysis Report
 
-Executive Summary:
-- Dataset contains {df.shape[0]} rows and {df.shape[1]} columns.
-- Dataset Health Score: {health_score}/100
-- Completeness Score: {completeness_score}/100
-- Uniqueness Score: {uniqueness_score}/100
-- Consistency Score: {consistency_score}/100
-- Model Readiness Score: {readiness_score}/100
+        Executive Summary:
+        - Dataset contains {df.shape[0]} rows and {df.shape[1]} columns.
+        - Dataset Health Score: {health_score}/100
+        - Completeness Score: {completeness_score}/100
+        - Uniqueness Score: {uniqueness_score}/100
+        - Consistency Score: {consistency_score}/100
+        - Model Readiness Score: {readiness_score}/100
 
-Dataset Quality:
-- Missing Values: {total_missing}
-- Missing Data Percentage: {missing_percentage:.2f}%
-- Duplicate Rows: {duplicate_rows}
-- Numeric Columns: {len(numeric_cols)}
-- Text Columns: {len(text_cols)}
+        Dataset Quality:
+        - Missing Values: {total_missing}
+        - Missing Data Percentage: {missing_percentage:.2f}%
+        - Duplicate Rows: {duplicate_rows}
+        - Numeric Columns: {len(numeric_cols)}
+        - Text Columns: {len(text_cols)}
 
-Machine Learning Summary:
-- Target Column: {target_column}
-- Best Model: {best_model_name}
-- Best Accuracy: {best_accuracy * 100:.2f}%
+        Machine Learning Summary:
+        - Target Column: {target_column}
+        - Best Model: {best_model_name}
+        - Best Accuracy: {best_accuracy * 100:.2f}%
 
-Top Feature:
-- {top_feature}
-- Importance Score: {top_value:.4f}
+        Top Feature:
+        - {top_feature}
+        - Importance Score: {top_value:.4f}
 
-Recommendations:
-{chr(10).join("- " + r for r in recommendations)}
-"""
-                    st.session_state["report"] = report_text
+        Recommendations:
+        {chr(10).join("- " + r for r in recommendations)}
+        """
+                            st.session_state["report"] = report_text
 
-                    executive_summary = generate_executive_summary(
-                        df=df,
-                        health_score=health_score,
-                        missing_percentage=missing_percentage,
-                        duplicate_rows=duplicate_rows,
-                        best_model_name=best_model_name,
-                        best_accuracy=best_accuracy,
-                        target_column=target_column,
-                        top_feature=top_feature
-                    )
-                    st.session_state["executive_summary"] = executive_summary
+                            executive_summary = generate_executive_summary(
+                                df=df,
+                                health_score=health_score,
+                                missing_percentage=missing_percentage,
+                                duplicate_rows=duplicate_rows,
+                                best_model_name=best_model_name,
+                                best_accuracy=best_accuracy,
+                                target_column=target_column,
+                                top_feature=top_feature
+                            )
+                            st.session_state["executive_summary"] = executive_summary
 
-                    st.markdown("### 🧠 AI Executive Summary")
-                    summary_html = executive_summary.replace("\n", "<br>")
-                    st.markdown(f"""
-                    <div class="insight-card">
-                        <h3>🧠 AI Executive Summary</h3>
-                        <p>{summary_html}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
+                            st.markdown("### 🧠 AI Executive Summary")
+                            summary_html = executive_summary.replace("\n", "<br>")
+                            st.markdown(f"""
+                            <div class="insight-card">
+                                <h3>🧠 AI Executive Summary</h3>
+                                <p>{summary_html}</p>
+                            </div>
+                            """, unsafe_allow_html=True)
 
-                    st.write("### 🔍 Model Explainability")
-                    explainability_df = importance.head(8).copy()
-                    explainability_df["Explanation"] = explainability_df["Feature"].apply(
-                        lambda x: f"{x} contributed to the model based on learned feature importance."
-                    )
-                    st.dataframe(explainability_df, use_container_width=True)
+                            st.write("### 🔍 Model Explainability")
+                            explainability_df = importance.head(8).copy()
+                            explainability_df["Explanation"] = explainability_df["Feature"].apply(
+                                lambda x: f"{x} contributed to the model based on learned feature importance."
+                            )
+                            st.dataframe(explainability_df, use_container_width=True)
 
-                    fig_exp, ax_exp = plt.subplots(figsize=(10, 5))
-                    ax_exp.barh(explainability_df["Feature"], explainability_df["Importance"])
-                    ax_exp.set_title("Top Feature Contributions")
-                    ax_exp.set_xlabel("Importance")
-                    ax_exp.invert_yaxis()
-                    st.pyplot(fig_exp)
+                            fig_exp, ax_exp = plt.subplots(figsize=(10, 5))
+                            ax_exp.barh(explainability_df["Feature"], explainability_df["Importance"])
+                            ax_exp.set_title("Top Feature Contributions")
+                            ax_exp.set_xlabel("Importance")
+                            ax_exp.invert_yaxis()
+                            st.pyplot(fig_exp)
 
-                    st.write("### 🧬 Universal Model Explainability")
-                    explain_df, explain_method, explain_note = compute_universal_explainability(
-                        best_model, X_train, X_test, y_test, X.columns
-                    )
+                            st.write("### 🧬 Universal Model Explainability")
+                            explain_df, explain_method, explain_note = compute_universal_explainability(
+                                best_model, X_train, X_test, y_test, X.columns
+                            )
 
-                    ai_feature_summary = build_feature_ai_summary(explain_df, explain_method, best_model_name, target_column)
-                    st.session_state["model_explainability_summary"] = ai_feature_summary
-                    st.session_state["explain_df"] = explain_df.copy()
-                    st.session_state["explain_method"] = explain_method
+                            ai_feature_summary = build_feature_ai_summary(explain_df, explain_method, best_model_name, target_column)
+                            st.session_state["model_explainability_summary"] = ai_feature_summary
+                            st.session_state["explain_df"] = explain_df.copy()
+                            st.session_state["explain_method"] = explain_method
 
-                    st.markdown(f"""
-                    <div class="model-highlight">
-                        🧠 <b>{explain_method}</b><br>
-                        {explain_note}<br><br>
-                        <b>AI Summary:</b> {ai_feature_summary}
-                    </div>
-                    """, unsafe_allow_html=True)
+                            st.markdown(f"""
+                            <div class="model-highlight">
+                                🧠 <b>{explain_method}</b><br>
+                                {explain_note}<br><br>
+                                <b>AI Summary:</b> {ai_feature_summary}
+                            </div>
+                            """, unsafe_allow_html=True)
 
-                    explain_top = prepare_top_importance_table(explain_df, top_n=10)
-                    st.dataframe(explain_top, use_container_width=True)
+                            explain_top = prepare_top_importance_table(explain_df, top_n=10)
+                            st.dataframe(explain_top, use_container_width=True)
 
-                    fig_uni, ax_uni = plt.subplots(figsize=(10, 5))
-                    top_explain = explain_df.head(15).sort_values("Importance", ascending=True)
-                    ax_uni.barh(top_explain["Feature"], top_explain["Importance"])
-                    ax_uni.set_xlabel("Importance")
-                    ax_uni.set_title(f"{explain_method} - Top 15 Feature Impact")
-                    st.pyplot(fig_uni)
+                            fig_uni, ax_uni = plt.subplots(figsize=(10, 5))
+                            top_explain = explain_df.head(15).sort_values("Importance", ascending=True)
+                            ax_uni.barh(top_explain["Feature"], top_explain["Importance"])
+                            ax_uni.set_xlabel("Importance")
+                            ax_uni.set_title(f"{explain_method} - Top 15 Feature Impact")
+                            st.pyplot(fig_uni)
 
-                    st.download_button(
-                        "📥 Download Explainability CSV",
-                        data=explain_df.to_csv(index=False).encode("utf-8"),
-                        file_name="labmind_explainability.csv",
-                        mime="text/csv",
-                        key="download_explainability_csv_automl"
-                    )
+                            st.download_button(
+                                "📥 Download Explainability CSV",
+                                data=explain_df.to_csv(index=False).encode("utf-8"),
+                                file_name="labmind_explainability.csv",
+                                mime="text/csv",
+                                key="download_explainability_csv_automl"
+                            )
 
-                    model_buffer = BytesIO()
-                    joblib.dump(best_model, model_buffer)
-                    model_buffer.seek(0)
+                            model_buffer = BytesIO()
+                            joblib.dump(best_model, model_buffer)
+                            model_buffer.seek(0)
 
-                    st.download_button(
-                        "📦 Download Best Model (.pkl)",
-                        data=model_buffer,
-                        file_name="labmind_best_model.pkl",
-                        mime="application/octet-stream",
-                        key="download_best_model_automl"
-                    )
+                            st.download_button(
+                                "📦 Download Best Model (.pkl)",
+                                data=model_buffer,
+                                file_name="labmind_best_model.pkl",
+                                mime="application/octet-stream",
+                                key="download_best_model_automl"
+                            )
 
     with tab6:
         st.markdown('<div class="section-title">Prediction Playground</div>', unsafe_allow_html=True)
@@ -3892,8 +3920,8 @@ Recommendations:
         else:
             st.info("Train models first to generate a report.")
 
-        with tab11:
-             render_pricing_page()
+    with tab11:
+        render_pricing_page()
 
 else:
     st.info("Upload a CSV file to begin.")
