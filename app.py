@@ -65,10 +65,8 @@ else:
         """,
         unsafe_allow_html=True,
     )
-try:
-    import shap
-except Exception:
-    shap = None
+
+shap = None
 
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
@@ -547,57 +545,96 @@ def compute_universal_explainability(model, X_train, X_test, y_test, feature_nam
         return fallback, "Fallback Explainability", f"LabMind could not compute model-specific explanations: {e}"
 
 def build_classification_models(y):
-    """Build a stronger AutoML model list with safe optional models."""
+    """
+    Build the LabMindX AutoML model list using memory-conscious defaults.
+    All algorithms remain available, but expensive ensemble models use
+    lighter baseline settings so the app can run on limited-RAM servers.
+    """
+
     models = {
         "Random Forest": RandomForestClassifier(
-            n_estimators=300, random_state=42, class_weight="balanced"
+            n_estimators=100,
+            random_state=42,
+            class_weight="balanced",
+            n_jobs=1,
         ),
+
         "Extra Trees": ExtraTreesClassifier(
-            n_estimators=300, random_state=42, class_weight="balanced"
+            n_estimators=100,
+            random_state=42,
+            class_weight="balanced",
+            n_jobs=1,
         ),
-        "Gradient Boosting": GradientBoostingClassifier(random_state=42),
-        "AdaBoost": AdaBoostClassifier(random_state=42),
-        "Decision Tree": DecisionTreeClassifier(random_state=42, class_weight="balanced"),
+
+        "Gradient Boosting": GradientBoostingClassifier(
+            n_estimators=100,
+            random_state=42,
+        ),
+
+        "AdaBoost": AdaBoostClassifier(
+            n_estimators=100,
+            random_state=42,
+        ),
+
+        "Decision Tree": DecisionTreeClassifier(
+            random_state=42,
+            class_weight="balanced",
+        ),
+
         "Logistic Regression": make_pipeline(
             StandardScaler(),
-            LogisticRegression(max_iter=4000, class_weight="balanced")
+            LogisticRegression(
+                max_iter=2000,
+                class_weight="balanced",
+            ),
         ),
+
         "SVM": make_pipeline(
             StandardScaler(),
-            SVC(probability=True, class_weight="balanced", random_state=42)
+            SVC(
+                probability=False,
+                class_weight="balanced",
+                random_state=42,
+            ),
         ),
+
         "KNN": make_pipeline(
             StandardScaler(),
-            KNeighborsClassifier(n_neighbors=5)
+            KNeighborsClassifier(n_neighbors=5),
         ),
+
         "Naive Bayes": GaussianNB(),
     }
 
     if XGBClassifier is not None:
         models["XGBoost"] = XGBClassifier(
-            n_estimators=250,
+            n_estimators=100,
             learning_rate=0.05,
             max_depth=4,
             random_state=42,
             eval_metric="logloss",
             verbosity=0,
+            n_jobs=1,
         )
 
     if LGBMClassifier is not None:
         models["LightGBM"] = LGBMClassifier(
-            n_estimators=250,
+            n_estimators=100,
             learning_rate=0.05,
             random_state=42,
             verbose=-1,
+            n_jobs=1,
         )
 
     if CatBoostClassifier is not None:
         models["CatBoost"] = CatBoostClassifier(
-            iterations=250,
+            iterations=100,
             learning_rate=0.05,
             depth=5,
             random_seed=42,
             verbose=False,
+            thread_count=1,
+            allow_writing_files=False,
         )
 
     return models
@@ -1009,41 +1046,48 @@ def tune_top_models(results, trained_models, X_train, y_train, X_test, y_test, t
 
     param_spaces = {
         "Random Forest": {
-            "n_estimators": [150, 250, 400],
-            "max_depth": [None, 4, 6, 10, 14],
-            "min_samples_split": [2, 4, 8],
-            "min_samples_leaf": [1, 2, 4],
+            "n_estimators": [80, 100, 150],
+            "max_depth": [None, 6, 10],
+            "min_samples_split": [2, 4],
+            "min_samples_leaf": [1, 2],
         },
+
         "Extra Trees": {
-            "n_estimators": [150, 250, 400],
-            "max_depth": [None, 4, 6, 10, 14],
+            "n_estimators": [80, 100, 150],
+            "max_depth": [None, 6, 10],
+            "min_samples_split": [2, 4],
+            "min_samples_leaf": [1, 2],
+        },
+
+        "Gradient Boosting": {
+            "n_estimators": [80, 100, 150],
+            "learning_rate": [0.05, 0.1],
+            "max_depth": [2, 3],
+        },
+
+        "AdaBoost": {
+            "n_estimators": [50, 100, 150],
+            "learning_rate": [0.05, 0.1, 0.5],
+        },
+
+        "Decision Tree": {
+            "max_depth": [None, 4, 6, 10],
             "min_samples_split": [2, 4, 8],
             "min_samples_leaf": [1, 2, 4],
         },
-        "Gradient Boosting": {
-            "n_estimators": [80, 120, 180, 250],
-            "learning_rate": [0.02, 0.05, 0.08, 0.1],
-            "max_depth": [2, 3, 4],
-        },
-        "AdaBoost": {
-            "n_estimators": [50, 100, 150, 250, 350],
-            "learning_rate": [0.03, 0.05, 0.1, 0.5, 1.0],
-        },
-        "Decision Tree": {
-            "max_depth": [None, 3, 4, 6, 10, 14],
-            "min_samples_split": [2, 4, 8, 12],
-            "min_samples_leaf": [1, 2, 4, 8],
-        },
+
         "Logistic Regression": {
-            "logisticregression__C": [0.01, 0.05, 0.1, 0.5, 1, 2, 5, 10],
+            "logisticregression__C": [0.1, 0.5, 1, 2],
         },
+
         "SVM": {
-            "svc__C": [0.1, 0.5, 1, 2, 5, 10],
-            "svc__gamma": ["scale", "auto", 0.01, 0.05, 0.1],
+            "svc__C": [0.5, 1, 2],
+            "svc__gamma": ["scale", "auto"],
             "svc__kernel": ["rbf", "linear"],
         },
+
         "KNN": {
-            "kneighborsclassifier__n_neighbors": [3, 5, 7, 9, 11],
+            "kneighborsclassifier__n_neighbors": [3, 5, 7],
             "kneighborsclassifier__weights": ["uniform", "distance"],
         },
     }
@@ -1062,7 +1106,7 @@ def tune_top_models(results, trained_models, X_train, y_train, X_test, y_test, t
             search = RandomizedSearchCV(
                 base_model,
                 param_distributions=param_spaces[name],
-                n_iter=min(8, sum(len(v) for v in param_spaces[name].values())),
+                n_iter=min(4, sum(len(v) for v in param_spaces[name].values())),
                 scoring="accuracy",
                 cv=cv_splits,
                 random_state=42,
@@ -1213,7 +1257,10 @@ def render_model_cards(trained_models, leaderboard):
 
 def render_shap_dashboard(model, X_train, X_test, feature_names):
     """Show SHAP plots when supported, without breaking the app."""
-    if shap is None:
+
+    try:
+        import shap
+    except Exception:
         st.info("SHAP is not installed. Run `pip install shap` to unlock SHAP plots.")
         return
 
@@ -1236,9 +1283,19 @@ def render_shap_dashboard(model, X_train, X_test, feature_names):
         st.pyplot(fig_shap, clear_figure=True)
 
         st.write("### SHAP Beeswarm Plot")
-        fig_bee = plt.figure(figsize=(10, 5))
-        shap.summary_plot(values_for_plot, sample, feature_names=feature_names, show=False)
+
+        plt.figure(figsize=(10, 5))
+
+        shap.summary_plot(
+            values_for_plot,
+            sample,
+            feature_names=feature_names,
+            show=False
+        )
+
+        fig_bee = plt.gcf()
         st.pyplot(fig_bee, clear_figure=True)
+        plt.close(fig_bee)
     except Exception as e:
         st.info(f"SHAP plot could not be rendered for this model, so LabMind is using universal explainability. Details: {e}")
 
@@ -3278,12 +3335,31 @@ if df is not None:
                         cv_std = np.nan
                         try:
                             status.info(f"Validating {i}/{len(models)} — {name}...")
-                            cv_splits = min(5, int(y.value_counts().min())) if y.nunique() <= 20 else 3
+
+                            cv_splits = min(
+                                2,
+                                int(y.value_counts().min())
+                            ) if y.nunique() <= 20 else 2
+
                             if cv_splits >= 2:
-                                cv = StratifiedKFold(n_splits=cv_splits, shuffle=True, random_state=42)
-                                cv_scores = cross_val_score(model, X, y, cv=cv, scoring="accuracy")
+                                cv = StratifiedKFold(
+                                    n_splits=cv_splits,
+                                    shuffle=True,
+                                    random_state=42
+                                )
+
+                                cv_scores = cross_val_score(
+                                    model,
+                                    X,
+                                    y,
+                                    cv=cv,
+                                    scoring="accuracy",
+                                    n_jobs=1
+                                )
+
                                 cv_mean = float(cv_scores.mean())
                                 cv_std = float(cv_scores.std())
+
                         except Exception:
                             pass
 
@@ -3311,19 +3387,20 @@ if df is not None:
                 status.success("Baseline model comparison complete.")
 
                 # Keep only the top 3 baseline models in memory before tuning
-                top_3_names = {
+                # Keep only the top 2 baseline models in memory before tuning
+                top_2_names = {
                     r["Model"]
                     for r in sorted(
                         results,
                         key=lambda r: r["Accuracy"],
                         reverse=True
-                    )[:3]
+                    )[:2]
                 }
 
                 trained_models = {
                     name: bundle
                     for name, bundle in trained_models.items()
-                    if name in top_3_names
+                    if name in top_2_names
                 }
 
                 import gc
@@ -3332,7 +3409,7 @@ if df is not None:
                 if run_hyperparameter_tuning and len(results) > 0:
                     with st.spinner("Optimizing top baseline models..."):
                         results, trained_models, tuning_log = tune_top_models(
-                            results, trained_models, X_train, y_train, X_test, y_test, top_k=3
+                            results, trained_models, X_train, y_train, X_test, y_test, top_k=2
                         )
                         st.session_state["tuning_results"] = tuning_log
 
