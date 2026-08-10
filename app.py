@@ -3338,12 +3338,17 @@ if df is not None:
                             st.session_state["category_maps"] = category_maps
                             st.session_state["numeric_defaults"] = numeric_defaults
                             st.session_state["target_label_map"] = target_label_map
-                            st.session_state["trained_models"] = trained_models
                             st.session_state["leaderboard"] = results_df.copy()
                             st.session_state["X_train"] = X_train
                             st.session_state["X_test"] = X_test
                             st.session_state["y_train"] = y_train
                             st.session_state["y_test"] = y_test
+
+                            # Free non-winning trained models to reduce Render memory usage
+                            trained_models.clear()
+
+                            import gc
+                            gc.collect()
 
                             st.success("Models trained successfully!")
 
@@ -3811,16 +3816,6 @@ if df is not None:
                 mime="application/octet-stream",
                 key="download_best_model_deploy"
             )
-
-            if "trained_models" in st.session_state:
-                zip_buffer = create_model_zip(st.session_state["trained_models"])
-                st.download_button(
-                    "🗂️ Download All Trained Models (.zip)",
-                    data=zip_buffer,
-                    file_name="labmind_model_repository.zip",
-                    mime="application/zip",
-                    key="download_model_repository_zip"
-                )
 
             deploy_metadata = {
                 "best_model": st.session_state.get("best_model_name"),
