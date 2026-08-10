@@ -3,8 +3,8 @@ from auth import (
     authenticate_user,
     create_user,
     validate_signup,
+    reset_password,
 )
-
 
 def render_auth_page() -> None:
     """Render the LabMind login and signup interface."""
@@ -138,6 +138,65 @@ def render_auth_page() -> None:
                     "Log in to LabMindX",
                     use_container_width=True,
                 )
+            if st.button(
+                "Forgot password?",
+                key="forgot_password_button",
+            ):
+                st.session_state["show_forgot_password"] = True
+                st.rerun()
+
+            if st.session_state.get("show_forgot_password", False):
+                st.markdown("## Reset your password")
+                st.caption(
+                    "Enter your account email and choose a new password."
+                )
+
+                with st.form("forgot_password_form"):
+                    reset_email = st.text_input(
+                        "Email address",
+                        placeholder="you@example.com",
+                    )
+
+                    new_password = st.text_input(
+                        "New password",
+                        type="password",
+                        placeholder="Minimum 8 characters",
+                    )
+
+                    confirm_new_password = st.text_input(
+                        "Confirm new password",
+                        type="password",
+                        placeholder="Re-enter your new password",
+                    )
+
+                    reset_submitted = st.form_submit_button(
+                        "Reset password",
+                        use_container_width=True,
+                    )
+
+                if reset_submitted:
+                    if new_password != confirm_new_password:
+                        st.error("Passwords do not match.")
+                    else:
+                        success, message = reset_password(
+                            reset_email,
+                            new_password,
+                        )
+
+                        if success:
+                            st.success(message)
+                            st.session_state["show_forgot_password"] = False
+                        else:
+                            st.error(message)
+
+                if st.button(
+                    "← Back to Login",
+                    key="back_to_login_from_reset",
+                ):
+                    st.session_state["show_forgot_password"] = False
+                    st.rerun()
+
+                return
 
             if login_submitted:
                 success, user, message = authenticate_user(

@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import os
 from pandas.api.types import is_numeric_dtype
 import numpy as np
 import matplotlib.pyplot as plt
@@ -38,6 +39,9 @@ if "saved_df" not in st.session_state:
 
 if "saved_filename" not in st.session_state:
     st.session_state["saved_filename"] = None
+
+if "active_section" not in st.session_state:
+    st.session_state["active_section"] = "Dashboard"
 
 user = st.session_state["current_user"]
 
@@ -2787,22 +2791,55 @@ Premium Dataset Health Card
 with st.sidebar:
     render_labmind_logo("small")
 
-    st.markdown(
-        """
-        <hr>
-        <div class="sidebar-item">🏠 Dashboard</div>
-        <div class="sidebar-item">📊 Overview</div>
-        <div class="sidebar-item">🧠 AI Insights</div>
-        <div class="sidebar-item">🧹 Auto Clean</div>
-        <div class="sidebar-item">📈 Visualizations</div>
-        <div class="sidebar-item">🤖 AutoML</div>
-        <div class="sidebar-item">🎯 Prediction Playground</div>
-        <div class="sidebar-item">💬 Data Chat</div>
-        <div class="sidebar-item">📄 Reports</div>
-        <hr>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.markdown("---")
+
+    sections = {
+        "🏠 Dashboard": "Dashboard",
+        "📊 Overview": "Overview",
+        "🧠 AI Insights": "AI Insights",
+        "🧹 Auto Clean": "Auto Clean",
+        "📈 Visualizations": "Visualizations",
+        "🤖 AutoML": "AutoML",
+        "🎯 Prediction Playground": "Prediction",
+        "💬 Data Chat": "Data Chat",
+        "🧬 Explainability": "Explainability",
+        "📄 Reports": "Reports",
+    }
+
+    for label, section in sections.items():
+        if st.button(
+            label,
+            key=f"sidebar_{section}",
+            use_container_width=True
+        ):
+            st.session_state["active_section"] = section
+            st.rerun()
+
+    st.markdown("---")
+
+    if st.session_state.get("authenticated"):
+
+        current_user = st.session_state.get("current_user")
+
+        if current_user:
+            st.caption(
+                f"Signed in as {current_user.get('full_name', 'User')}"
+            )
+
+        if st.button(
+            "🚪 Logout",
+            key="sidebar_logout",
+            use_container_width=True
+        ):
+            st.session_state.clear()
+
+            st.session_state["authenticated"] = False
+            st.session_state["current_user"] = None
+            st.session_state["auth_mode"] = "Login"
+            st.session_state["show_auth_page"] = True
+            st.session_state["return_to_training"] = False
+
+            st.rerun()
 
     st.info("Version 3.0 Premium MVP")
 
@@ -3002,21 +3039,9 @@ if df is not None:
             </div>
             """, unsafe_allow_html=True)
 
-    tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8, tab9, tab10, tab11 = st.tabs([
-        "📊 Overview",
-        "🧠 AI Insights",
-        "🧹 Auto Clean",
-        "📈 Visualizations",
-        "🤖 AutoML",
-        "🎯 Predict",
-        "💬 AI Data Chat",
-        "🧬 Explainability",
-        "📄 Report",
-        "🚀 Deploy",
-        "💎 Pricing"
-    ])
+    active_section = st.session_state.get("active_section", "Dashboard")
 
-    with tab1:
+    if active_section == "Overview":
         st.markdown('<div class="section-title">Dataset Overview</div>', unsafe_allow_html=True)
         render_ai_dataset_summary(df, numeric_cols, text_cols, health_score, missing_percentage, duplicate_rows, df.columns[detect_default_target(df)])
 
@@ -3135,7 +3160,7 @@ if df is not None:
                 key="download_dataset_comparison_csv"
             )
 
-    with tab2:
+    if active_section == "AI Insights":
         st.markdown('<div class="section-title">AI Insights & Recommendations</div>', unsafe_allow_html=True)
 
         a1, a2, a3, a4 = st.columns(4)
@@ -3161,7 +3186,7 @@ if df is not None:
             </div>
             """, unsafe_allow_html=True)
 
-    with tab3:
+    if active_section == "Auto Clean":
         st.markdown('<div class="section-title">Auto Clean Dataset</div>', unsafe_allow_html=True)
 
         st.write("LabMind will:")
@@ -3200,7 +3225,7 @@ if df is not None:
                 key="download_cleaned_csv"
             )
 
-    with tab4:
+    if active_section == "Visualizations":
         st.markdown('<div class="section-title">Visualizations</div>', unsafe_allow_html=True)
 
         if len(numeric_cols) == 0:
@@ -3264,7 +3289,7 @@ if df is not None:
 
             st.info(f"Potential outliers in {outlier_col}: {outliers.shape[0]}")
 
-    with tab5:
+    if active_section == "AutoML":
         st.markdown('<div class="section-title">AutoML Model Training</div>', unsafe_allow_html=True)
 
         default_target = detect_default_target(df)
@@ -3702,7 +3727,7 @@ if df is not None:
                                 key="download_best_model_automl"
                             )
 
-    with tab6:
+    if active_section == "Prediction":
         st.markdown('<div class="section-title">Prediction Playground</div>', unsafe_allow_html=True)
 
         if "best_model" not in st.session_state:
@@ -3776,7 +3801,7 @@ if df is not None:
                     key="download_prediction_history_csv"
                 )
 
-    with tab7:
+    if active_section == "Data Chat":
         st.markdown('<div class="section-title">Chat With Your Dataset</div>', unsafe_allow_html=True)
 
         st.markdown("""
@@ -3814,7 +3839,7 @@ if df is not None:
             </div>
             """, unsafe_allow_html=True)
 
-    with tab8:
+    if active_section == "Explainability":
         st.markdown('<div class="section-title">Explainability Dashboard</div>', unsafe_allow_html=True)
 
         if "explain_df" not in st.session_state:
@@ -3877,7 +3902,7 @@ if df is not None:
                 key="download_explainability_dashboard_csv"
             )
 
-    with tab10:
+    if active_section == "Deploy":
         st.markdown('<div class="section-title">Deployment Center</div>', unsafe_allow_html=True)
 
         if "best_model" not in st.session_state:
@@ -3952,7 +3977,7 @@ if df is not None:
             ]:
                 st.markdown(f"✅ {item}")
 
-    with tab9:
+    if active_section == "Reports":
         st.markdown('<div class="section-title">Executive Report</div>', unsafe_allow_html=True)
 
         if "report" in st.session_state:
@@ -4011,7 +4036,7 @@ if df is not None:
         else:
             st.info("Train models first to generate a report.")
 
-    with tab11:
+    if active_section == "Pricing":
         render_pricing_page()
 
 else:

@@ -311,3 +311,49 @@ def authenticate_user(
         safe_user,
         "Login successful.",
     )
+
+def reset_password(email: str, new_password: str) -> tuple[bool, str]:
+    """Reset a user's password after validating the account."""
+
+    initialize_auth_database()
+    email = normalize_email(email)
+
+    if len(new_password) < 8:
+        return False, "Password must contain at least 8 characters."
+
+    if not any(character.isupper() for character in new_password):
+        return False, "Password must contain at least one uppercase letter."
+
+    if not any(character.islower() for character in new_password):
+        return False, "Password must contain at least one lowercase letter."
+
+    if not any(character.isdigit() for character in new_password):
+        return False, "Password must contain at least one number."
+
+    with get_connection() as connection:
+        user = connection.execute(
+            "SELECT id FROM users WHERE email = ?",
+            (email,),
+        ).fetchone()
+
+        if user is None:
+            return False, "No account was found with that email address."
+
+        password_hash, password_salt = hash_password(new_password)
+
+        connection.execute(
+            """
+            UPDATE users
+            SET password_hash = ?, password_salt = ?
+            WHERE email = ?
+            """,
+            (
+                password_hash,
+                password_salt,
+                email,
+            ),
+        )
+
+        connection.commit()
+
+    return True, "Password updated successfully. You can now log in."
