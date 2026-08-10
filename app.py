@@ -1066,7 +1066,7 @@ def tune_top_models(results, trained_models, X_train, y_train, X_test, y_test, t
                 scoring="accuracy",
                 cv=cv_splits,
                 random_state=42,
-                n_jobs=-1,
+                n_jobs=1,
             )
             search.fit(X_train, y_train)
             tuned_model = search.best_estimator_
@@ -3309,6 +3309,25 @@ if df is not None:
 
                 progress.progress(1.0)
                 status.success("Baseline model comparison complete.")
+
+                # Keep only the top 3 baseline models in memory before tuning
+                top_3_names = {
+                    r["Model"]
+                    for r in sorted(
+                        results,
+                        key=lambda r: r["Accuracy"],
+                        reverse=True
+                    )[:3]
+                }
+
+                trained_models = {
+                    name: bundle
+                    for name, bundle in trained_models.items()
+                    if name in top_3_names
+                }
+
+                import gc
+                gc.collect()
 
                 if run_hyperparameter_tuning and len(results) > 0:
                     with st.spinner("Optimizing top baseline models..."):
