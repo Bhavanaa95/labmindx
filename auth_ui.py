@@ -196,7 +196,7 @@ def render_auth_page() -> None:
                     st.session_state["show_forgot_password"] = False
                     st.rerun()
 
-                return
+                #return
 
             if login_submitted:
                 success, user, message = authenticate_user(
