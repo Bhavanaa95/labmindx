@@ -84,7 +84,7 @@ def render_auth_page() -> None:
         '<div style="font-size:46px;font-weight:900;margin-bottom:8px;">'
         '🧪 LabMindX</div>'
         '<div style="font-size:18px;font-weight:700;'
-        'color:#dbeafe;margin-bottom:32px;">Premium AI Data Analyst</div>'
+        'color:#dbeafe;margin-bottom:32px;">No-Code AutoML & Data Intelligence</div>'
         '<div style="font-size:31px;font-weight:900;'
         'margin-bottom:12px;">Turn datasets into decisions.</div>'
         '<div style="font-size:16px;line-height:1.7;'

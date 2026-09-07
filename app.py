@@ -64,13 +64,17 @@ else:
         """
         <h2>👋 Welcome to LabMindX</h2>
         <p style="color:gray;">
-            Explore your dataset first. Create an account when you're ready to train models.
+            Turn raw datasets into insights, trained machine-learning models,
+            explainable predictions, and professional reports — without writing code.
         </p>
         """,
         unsafe_allow_html=True,
     )
 
-shap = None
+try:
+    import shap
+except Exception:
+    shap = None
 
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
@@ -1349,13 +1353,13 @@ def render_pricing_page():
 
             Unlock the full LabMind experience:
 
-            - ✅ Expanded dataset usage
             - ✅ Full AutoML model suite
+            - ✅ Advanced workflow features
             - ✅ AI Insights
             - ✅ Explainable AI
             - ✅ Prediction Playground
             - ✅ PDF & PowerPoint reports
-            - ✅ 500 MB uploads
+            - ✅ Priority support
             - ✅ Email support
             """
         )
@@ -1365,10 +1369,15 @@ def render_pricing_page():
             st.rerun()
 
         st.button(
-            "Continue to Payment — $29/month",
+            "Payment integration coming soon",
             type="primary",
             use_container_width=True,
             key="continue_pro_payment",
+            disabled=True,
+        )
+
+        st.caption(
+            "Online subscription checkout is not yet enabled."
         )
 
         return
@@ -1397,10 +1406,15 @@ def render_pricing_page():
             st.rerun()
 
         st.button(
-            "Continue to Payment — $99/month",
+            "Payment integration coming soon",
             type="primary",
             use_container_width=True,
             key="continue_business_payment",
+            disabled=True,
+        )
+
+        st.caption(
+            "Online subscription checkout is not yet enabled."
         )
 
         return
@@ -1413,12 +1427,11 @@ def render_pricing_page():
             """
             Your Free plan includes:
 
-            - ✅ 3 datasets per month
-            - ✅ Basic dataset analysis
-            - ✅ Basic cleaning
-            - ✅ Limited AutoML
+            - ✅ Core dataset analysis
+            - ✅ Basic cleaning tools
+            - ✅ Limited AutoML access
             - ✅ Basic visualizations
-            - ✅ 25 MB uploads
+            - ✅ Great for testing the workflow
             """
         )
 
@@ -1544,6 +1557,11 @@ def render_pricing_page():
         unsafe_allow_html=True,
     )
 
+    st.caption(
+        "LabMindX is currently in early-access MVP stage. "
+        "Core analysis, AutoML, explainability, prediction, and reporting workflows are functional."
+    )
+
     free_col, pro_col, business_col = st.columns(3, gap="large")
 
     with free_col:
@@ -1554,12 +1572,11 @@ def render_pricing_page():
             <div class="pricing-desc">
                 Perfect for exploring LabMind and trying core dataset workflows.
             </div>
-            <div class="pricing-feature">✓ 3 datasets per month</div>
-            <div class="pricing-feature">✓ Basic dataset analysis</div>
+            <div class="pricing-feature">✓ Core dataset analysis</div>
             <div class="pricing-feature">✓ Basic cleaning tools</div>
-            <div class="pricing-feature">✓ Limited AutoML</div>
+            <div class="pricing-feature">✓ Limited AutoML access</div>
             <div class="pricing-feature">✓ Basic visualizations</div>
-            <div class="pricing-feature">✓ 25 MB upload limit</div>
+            <div class="pricing-feature">✓ Great for testing the workflow</div>
         </div>
         """
 
@@ -1591,14 +1608,13 @@ def render_pricing_page():
                 For researchers, analysts, freelancers, and power users.
             </div>
             <div class="pricing-feature">✓ Everything in Free</div>
-            <div class="pricing-feature">✓ Expanded dataset usage</div>
             <div class="pricing-feature">✓ Full AutoML model suite</div>
             <div class="pricing-feature">✓ AI Insights</div>
             <div class="pricing-feature">✓ Explainable AI</div>
             <div class="pricing-feature">✓ Prediction Playground</div>
             <div class="pricing-feature">✓ PDF & PPT reports</div>
-            <div class="pricing-feature">✓ 500 MB upload limit</div>
-            <div class="pricing-feature">✓ Email support</div>
+            <div class="pricing-feature">✓ Advanced workflow features</div>
+            <div class="pricing-feature">✓ Priority support</div>
         </div>
         """
 
@@ -1630,13 +1646,11 @@ def render_pricing_page():
                 Built for teams and organizations running serious analytics workflows.
             </div>
             <div class="pricing-feature">✓ Everything in Professional</div>
-            <div class="pricing-feature">✓ Higher usage limits</div>
-            <div class="pricing-feature">✓ Priority processing</div>
-            <div class="pricing-feature">✓ Larger dataset uploads</div>
+            <div class="pricing-feature">✓ Priority support</div>
+            <div class="pricing-feature">✓ Advanced usage workflows</div>
             <div class="pricing-feature">✓ Team workspaces <strong>(coming soon)</strong></div>
             <div class="pricing-feature">✓ Project sharing <strong>(coming soon)</strong></div>
             <div class="pricing-feature">✓ API access <strong>(planned)</strong></div>
-            <div class="pricing-feature">✓ Priority support</div>
             <div class="pricing-feature">✓ Early access to new features</div>
         </div>
         """
@@ -2804,6 +2818,7 @@ with st.sidebar:
         "💬 Data Chat": "Data Chat",
         "🧬 Explainability": "Explainability",
         "📄 Reports": "Reports",
+        "💳 Pricing": "Pricing",
     }
 
     for label, section in sections.items():
@@ -3411,7 +3426,7 @@ if df is not None:
                 progress.progress(1.0)
                 status.success("Baseline model comparison complete.")
 
-                # Keep only the top 3 baseline models in memory before tuning
+                
                 # Keep only the top 2 baseline models in memory before tuning
                 top_2_names = {
                     r["Model"]
@@ -3466,7 +3481,7 @@ if df is not None:
                             st.session_state["y_test"] = y_test
 
                             # Free non-winning trained models to reduce Render memory usage
-                            trained_models.clear()
+                            
 
                             import gc
                             gc.collect()
@@ -3955,7 +3970,7 @@ if df is not None:
                 key="download_deployment_metadata_json"
             )
 
-            st.write("### One-click Deployment Targets")
+            st.write("### Deployment Options")
             st.markdown("""
             <div class="ai-summary-card compact-card">
                 <ul class="premium-list">

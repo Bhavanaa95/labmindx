@@ -313,7 +313,7 @@ def authenticate_user(
     )
 
 def reset_password(email: str, new_password: str) -> tuple[bool, str]:
-    """Reset a user's password after validating the account."""
+    """Reset a user's password."""
 
     initialize_auth_database()
     email = normalize_email(email)
@@ -330,30 +330,77 @@ def reset_password(email: str, new_password: str) -> tuple[bool, str]:
     if not any(character.isdigit() for character in new_password):
         return False, "Password must contain at least one number."
 
-    with get_connection() as connection:
-        user = connection.execute(
-            "SELECT id FROM users WHERE email = ?",
-            (email,),
-        ).fetchone()
+    try:
+        with get_connection() as connection:
 
-        if user is None:
-            return False, "No account was found with that email address."
+            if using_postgres():
+                user = connection.execute(
+                    """
+                    SELECT id
+                    FROM users
+                    WHERE LOWER(email) = LOWER(%s)
+                    """,
+                    (email,),
+                ).fetchone()
 
-        password_hash, password_salt = hash_password(new_password)
+            else:
+                user = connection.execute(
+                    """
+                    SELECT id
+                    FROM users
+                    WHERE email = ?
+                    """,
+                    (email,),
+                ).fetchone()
 
-        connection.execute(
-            """
-            UPDATE users
-            SET password_hash = ?, password_salt = ?
-            WHERE email = ?
-            """,
-            (
-                password_hash,
-                password_salt,
-                email,
-            ),
+            if user is None:
+                return False, "No account was found with that email address."
+
+            password_hash, password_salt = hash_password(
+                new_password
+            )
+
+            if using_postgres():
+                connection.execute(
+                    """
+                    UPDATE users
+                    SET password_hash = %s,
+                        password_salt = %s
+                    WHERE LOWER(email) = LOWER(%s)
+                    """,
+                    (
+                        password_hash,
+                        password_salt,
+                        email,
+                    ),
+                )
+
+            else:
+                connection.execute(
+                    """
+                    UPDATE users
+                    SET password_hash = ?,
+                        password_salt = ?
+                    WHERE email = ?
+                    """,
+                    (
+                        password_hash,
+                        password_salt,
+                        email,
+                    ),
+                )
+
+            connection.commit()
+
+        return (
+            True,
+            "Password updated successfully. You can now log in."
         )
 
-        connection.commit()
+    except Exception as error:
+        print("PASSWORD RESET ERROR:", error)
 
-    return True, "Password updated successfully. You can now log in."
+        return (
+            False,
+            "The password could not be updated. Please try again."
+        )
