@@ -10,3 +10,4 @@ users.db
 *.log
 .env.*
 __pypackages__/
+requirements_backup.txt
